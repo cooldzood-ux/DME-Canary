@@ -38,7 +38,11 @@ enum class OtbmNode : uint8_t {
     Town = 13,
     HouseTile = 14,
     Waypoints = 15,
-    Waypoint = 16
+    Waypoint = 16,
+    // Canary (opentibiabr) extensions.
+    SpawnNpcArea = 17,
+    SpawnsNpc = 18,
+    TileZone = 19
 };
 
 enum class OtbmAttribute : uint8_t {
@@ -65,6 +69,7 @@ enum class OtbmAttribute : uint8_t {
     SleepStart = 21,
     Charges = 22,
     ExtSpawnNpcFile = 23,
+    ExtZoneFile = 24,
     PodiumOutfit = 40,
     Tier = 41,
     AttributeMap = 128
@@ -74,8 +79,16 @@ enum class OtbmVersion : uint32_t {
     V1 = 0,
     V2 = 1,
     V3 = 2,
-    V4 = 3
+    V4 = 3,
+    // Canary's map editor writes MAP_OTBM_5 (raw value 4) with client item
+    // ids, separate monster/NPC/zone XML files and OTBM_TILE_ZONE nodes.
+    // Canary 3.6 accepts raw versions up to 5.
+    V5 = 4,
+    V6 = 5
 };
+
+// The DME client profile used for Canary/Tibia 15.x maps.
+constexpr int kCanaryClientVersion = 1511;
 
 enum OtbmTileFlag : uint32_t {
     TileNone = 0,
@@ -284,6 +297,25 @@ struct OtbmHouse {
     int townId = 0;
     bool guildhall = false;
     int entryX = 0, entryY = 0, entryZ = 0;
+    // Canary house attributes (cyclopedia client id, bed count); kept as read.
+    int clientId = 0;
+    int beds = 0;
+    int size = -1; // "size" as read; -1 = count house tiles on save
+};
+
+// Canary sidecars: monsters and NPCs live in separate files, zones have their
+// own XML with names. Kept together so load/adopt/recovery copy them as one.
+struct OtbmCanarySidecars {
+    QString npcFile;
+    QByteArray npcFileOriginal;
+    QString zoneFile;
+    QByteArray zoneFileOriginal;
+    QHash<quint64, int> npcSpawnRadius; // NPC spawn areas by center position
+    QMap<int, QString> zoneNames;       // zoneid -> name from -zones.xml
+    bool npcXmlLoaded = false;
+    bool zonesXmlLoaded = false;
+    bool npcModified = false;
+    bool tileZoneNodes = false;         // zones stored as OTBM_TILE_ZONE nodes
 };
 
 class OtbmReader : public QObject
@@ -344,6 +376,8 @@ public:
     QString description() const { return m_description; }
     QString spawnFile() const { return m_spawnFile; }
     QString houseFile() const { return m_houseFile; }
+    QString npcFile() const { return m_canary.npcFile; }
+    QString zoneFile() const { return m_canary.zoneFile; }
     int tileCount() const { return static_cast<int>(m_tiles.size()); }
     int itemCount() const { return m_itemCount; }
     int townCount() const { return static_cast<int>(m_towns.size()); }
@@ -567,6 +601,12 @@ private:
 
     bool loadHousesXml(const QString &mapPath);
     bool buildHousesXml(const QString &mapPath, QString &targetPath, QByteArray &data);
+
+    bool isCanaryFormat() const { return m_otbmVersion >= static_cast<uint32_t>(OtbmVersion::V5); }
+    bool loadNpcXml(const QString &mapPath);
+    bool buildNpcXml(const QString &mapPath, QString &targetPath, QByteArray &data);
+    bool loadZonesXml(const QString &mapPath);
+    bool buildZonesXml(const QString &mapPath, QString &targetPath, QByteArray &data);
     OtbmHouse *houseById(int id);
 
     struct TileSnapshot {
@@ -650,6 +690,7 @@ private:
     QByteArray m_descriptionOriginal;
     QByteArray m_spawnFileOriginal;
     QByteArray m_houseFileOriginal;
+    OtbmCanarySidecars m_canary;
 
     bool m_spawnsXmlLoaded = false;
     bool m_housesXmlLoaded = false;

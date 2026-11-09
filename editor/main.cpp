@@ -220,6 +220,35 @@ int main(int argc, char *argv[])
                     app.exit(2);
                 });
             }
+            // Diagnostics: --profile-screenshot <png> [--profile-center x,y,z]
+            // saves the editor window once the first map view and atlas are
+            // ready, then exits. Used to check rendering without user input.
+            const QString screenshot = option(QStringLiteral("--profile-screenshot"));
+            if (!screenshot.isEmpty()) {
+                const QStringList center = option(QStringLiteral("--profile-center")).split(QLatin1Char(','));
+                if (auto *view = root->findChild<MapView *>()) {
+                    auto shoot = [&app, view, screenshot, center] {
+                        if (center.size() == 3)
+                            view->centerOnPosition(center[0].toInt(), center[1].toInt(), center[2].toInt());
+                        QTimer::singleShot(20000, &app, [&app, screenshot] {
+                            QQuickWindow *window = nullptr;
+                            for (QWindow *candidate : QGuiApplication::topLevelWindows()) {
+                                auto *quick = qobject_cast<QQuickWindow *>(candidate);
+                                if (quick && quick->isVisible()
+                                    && (!window || quick->width() * quick->height() > window->width() * window->height()))
+                                    window = quick;
+                            }
+                            const QImage image = window ? window->grabWindow() : QImage();
+                            const bool saved = !image.isNull() && image.save(screenshot);
+                            std::fprintf(stderr, "DME_SCREENSHOT saved=%d size=%dx%d\n", saved ? 1 : 0,
+                                         image.width(), image.height());
+                            app.exit(saved ? 0 : 3);
+                        });
+                    };
+                    QObject::connect(view, &MapView::initialViewReady, &app, shoot, Qt::SingleShotConnection);
+                }
+                QTimer::singleShot(600000, &app, [&app] { app.exit(2); });
+            }
             QTimer::singleShot(0, root, [root, path, folder, version] {
                 QMetaObject::invokeMethod(root, "profileOpen", Q_ARG(QVariant, path),
                     Q_ARG(QVariant, folder), Q_ARG(QVariant, version));

@@ -126,7 +126,10 @@ Window {
                             id:fileRows;anchors.left:parent.left;anchors.right:parent.right;anchors.margins:10;y:10;spacing:8
                             Label {text:"Client files";font.bold:true;font.pixelSize:12}
                             Repeater {
-                                model:[{key:"dat",label:"DAT *"},{key:"spr",label:"SPR *"},{key:"otb",label:"OTB *"},{key:"xml",label:"items.xml"},{key:"otfi",label:"OTFI"}]
+                                // Tibia 13+/15.x: catalog-content.json replaces DAT, SPR and OTB.
+                                model:root.resolved.appearance
+                                    ? [{key:"catalog",label:"Catalog *"},{key:"xml",label:"items.xml"}]
+                                    : [{key:"dat",label:"DAT *"},{key:"spr",label:"SPR *"},{key:"otb",label:"OTB *"},{key:"xml",label:"items.xml"},{key:"otfi",label:"OTFI"}]
                                 delegate:ColumnLayout {
                                     required property var modelData
                                     Layout.fillWidth:true;spacing:3
@@ -166,6 +169,11 @@ Window {
                                 }
                             }
                             Label {text:"* Required. Blank = automatic; Off = optional file disabled.";color:"#aaa99f"}
+                            Label {
+                                Layout.fillWidth:true;wrapMode:Text.WordWrap;color:"#aaa99f"
+                                visible:!!root.resolved.appearance
+                                text:"Tibia 15 assets: appearances and sprite sheets are read from your own Tibia installation. Item properties come from the appearance flags; Canary maps use client ids, so no items.otb is needed."
+                            }
                         }
                     }
                     DmeButton {Layout.fillWidth:true;Layout.preferredHeight:28;text:(root.advanced ? "−" : "+")+"  Advanced format settings";onClicked:root.advanced=!root.advanced}
@@ -186,7 +194,7 @@ Window {
                     }
                     RowLayout {
                         Layout.fillWidth:true
-                        Label {Layout.fillWidth:true;text:root.validationId ? "Checking files…" : root.validation && root.validation.success ? "✓  DAT, SPR and OTB validated" : "Profile not validated";color:root.validation && root.validation.success ? "#83b77c" : "#c2b58b"}
+                        Label {Layout.fillWidth:true;text:root.validationId ? "Checking files…" : root.validation && root.validation.success ? (root.resolved.appearance ? "✓  Tibia 15 assets validated" : "✓  DAT, SPR and OTB validated") : "Profile not validated";color:root.validation && root.validation.success ? "#83b77c" : "#c2b58b"}
                         DmeButton {objectName:"validateClientProfile";text:"Validate files";Layout.preferredHeight:30;enabled:!root.validationId;onClicked:{root.message="";root.validationId=Backend.clientLoader.validateProfile(root.draft);}}
                     }
                     Label {Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone;text:root.message || (root.validation ? root.validation.error || "Profile ready to use" : "Save incomplete profiles now and finish them later.");color:"#bdbdb2"}

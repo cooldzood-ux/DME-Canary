@@ -57,6 +57,16 @@ if (-not $visualStudioPath) {
 }
 Write-Host "MSVC: $visualStudioPath"
 
+# Pick the CMake preset that matches the installed Visual Studio major version
+# (17 = VS 2022, 18 = VS 2026). DME_CONFIGURE_PRESET / DME_BUILD_PRESET override it.
+$visualStudioMajor = (& $vswhere -latest -products * `
+    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+    -property installationVersion) -replace '\..*$', ''
+$defaultSuffix = if ($visualStudioMajor -eq "18") { "-vs2026" } else { "" }
+$configurePreset = if ($env:DME_CONFIGURE_PRESET) { $env:DME_CONFIGURE_PRESET } else { "windows-vcpkg$defaultSuffix" }
+$buildPreset = if ($env:DME_BUILD_PRESET) { $env:DME_BUILD_PRESET } else { "windows-release$defaultSuffix" }
+Write-Host "CMake presets: $configurePreset / $buildPreset"
+
 if ((Test-Path -LiteralPath $vcpkgRoot) -and
     -not (Test-Path -LiteralPath (Join-Path $vcpkgRoot ".git"))) {
     throw "$vcpkgRoot exists but is not a valid vcpkg checkout. Remove that directory and run the build again."
@@ -111,7 +121,7 @@ if (-not $env:VCPKG_BINARY_SOURCES) {
 Push-Location $repositoryRoot
 try {
     Write-Host "Configuring the project and installing dependencies..."
-    & cmake.exe --preset windows-vcpkg
+    & cmake.exe --preset $configurePreset
     if ($LASTEXITCODE -ne 0) {
         $manifestLog = Join-Path $repositoryRoot `
             "build\vcpkg-windows\vcpkg-manifest-install.log"
@@ -125,7 +135,7 @@ try {
     }
 
     Write-Host "Building and packaging the Release configuration..."
-    & cmake.exe --build --preset windows-release
+    & cmake.exe --build --preset $buildPreset
     if ($LASTEXITCODE -ne 0) {
         throw "The release build failed with exit code $LASTEXITCODE."
     }
